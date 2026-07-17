@@ -130,9 +130,11 @@ def deduplicate(candidates, history):
 
 
 def llm_score(candidates, model):
-    """LLM-оценка новостей от 0 до 10."""
+    """LLM-оценка новостей от 0 до 10 с задержкой между запросами."""
+    # Ограничиваем количество кандидатов для оценки (free tier: 15 RPM)
+    MAX_CANDIDATES_TO_SCORE = 12
     scored = []
-    for c in candidates:
+    for i, c in enumerate(candidates[:MAX_CANDIDATES_TO_SCORE]):
         prompt = f"""Оцени эту научную новость от 0 до 10 по критериям:
 - Интересность для широкой аудитории (не специалистов)
 - Новизна и значимость открытия
@@ -155,7 +157,13 @@ def llm_score(candidates, model):
                 print(f"  ⭐ [{score}/10] {c['title'][:60]}...")
         except Exception as e:
             print(f"  ⚠️ Ошибка LLM: {e}")
-            continue
+            # При 429 — ждём и пробуем дальше
+            if "429" in str(e):
+                print("  ⏳ Rate limit, жду 25 сек...")
+                time.sleep(25)
+                continue
+        # Задержка между запросами для соблюдения лимита 15 RPM
+        time.sleep(5)
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[:TOP_N]
