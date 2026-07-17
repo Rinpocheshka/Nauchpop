@@ -240,7 +240,7 @@ def main():
 
     # Настройка Gemini
     genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-3.1-flash-lite")
 
     # Загружаем и чистим историю
     history = load_history()
