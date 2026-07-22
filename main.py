@@ -267,7 +267,7 @@ def main():
 
     # Настройка Gemini
     genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel("gemini-3.1-flash-lite")
+    model = genai.GenerativeModel("gemini-3.5-flash-lite")
 
     # Загружаем и чистим историю
     history = load_history()
