@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import hashlib
@@ -226,19 +227,95 @@ def generate_post(top_news, model):
         return None
 
 
-def send_to_telegram(text, bot_token, channel_id):
-    """Отправка поста в Telegram."""
+def fetch_og_image(url):
+    """Извлекает og:image URL из страницы."""
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        if resp.status_code != 200:
+            return None
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # Ищем og:image
+        meta = soup.find("meta", property="og:image")
+        if meta and meta.get("content"):
+            return meta["content"]
+        # Фолбэк: twitter:image
+        meta = soup.find("meta", attrs={"name": "twitter:image"})
+        if meta and meta.get("content"):
+            return meta["content"]
+    except Exception as e:
+        print(f"  ⚠️ Не удалось извлечь картинку: {e}")
+    return None
+
+
+def send_to_telegram(text, bot_token, channel_id, image_url=None):
+    """Отправка поста в Telegram. Если image_url — отправляем фото + текст."""
+    if image_url:
+        # 1. Скачиваем картинку
+        try:
+            img_resp = requests.get(image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            if img_resp.status_code != 200:
+                print(f"  ⚠️ Не удалось скачать картинку ({img_resp.status_code}), отправляю без неё")
+                image_url = None
+        except Exception as e:
+            print(f"  ⚠️ Ошибка скачивания картинки: {e}")
+            image_url = None
+
+    if image_url:
+        # Разбиваем текст на заголовок (до первого описания) и остальное
+        # Ищем первую новость: от вступления до второго номера
+        parts = re.split(r'(1️⃣|2️⃣|3️⃣)', text, maxsplit=2)
+        # parts = ['intro', '1️⃣', 'описание1...2️⃣', 'описание2...3️⃣', 'описание3...']
+        intro_and_first = ""
+        rest = text
+        if len(parts) >= 3:
+            intro_and_first = parts[0] + parts[1] + parts[2]
+            rest = "".join(parts[3:]) if len(parts) > 3 else ""
+            # Убираем лишний пробел в начале rest
+            rest = rest.lstrip()
+
+        # Ограничиваем caption (Telegram: 1024 символа)
+        if len(intro_and_first) > 1024:
+            intro_and_first = intro_and_first[:1020] + "..."
+
+        # Отправляем фото с caption
+        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+        with open("/tmp/news_image.jpg", "wb") as f:
+            f.write(img_resp.content)
+        with open("/tmp/news_image.jpg", "rb") as photo:
+            payload = {
+                "chat_id": channel_id,
+                "caption": intro_and_first,
+                "parse_mode": "HTML",
+            }
+            resp = requests.post(url, data=payload, files={"photo": photo}, timeout=30)
+
+        if resp.status_code != 200:
+            print(f"  ⚠️ Ошибка sendPhoto ({resp.status_code}): {resp.text}")
+            # Фолбэк — отправляем просто текст
+            return _send_text(text, bot_token, channel_id)
+
+        print("  📸 Картинка отправлена")
+
+        # Отправляем остаток текста
+        if rest.strip():
+            return _send_text(rest, bot_token, channel_id)
+        return True
+    else:
+        return _send_text(text, bot_token, channel_id)
+
+
+def _send_text(text, bot_token, channel_id):
+    """Отправка текстового сообщения."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": channel_id,
         "text": text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+        "disable_web_page_preview": True,
     }
-
     resp = requests.post(url, json=payload, timeout=30)
     if resp.status_code == 200:
-        print("✅ Пост успешно отправлен в Telegram!")
+        print("✅ Текст отправлен в Telegram!")
         return True
     else:
         print(f"❌ Ошибка Telegram API ({resp.status_code}): {resp.text}")
@@ -309,7 +386,13 @@ def main():
 
     # 5. Отправка в Telegram
     print("\n📤 Шаг 5: Отправка в Telegram...")
-    success = send_to_telegram(post, bot_token, channel_id)
+    # Извлекаем картинку из первой новости
+    image_url = None
+    if top_news:
+        image_url = fetch_og_image(top_news[0]["url"])
+        if image_url:
+            print(f"  🖼️ Картинка: {image_url[:80]}...")
+    success = send_to_telegram(post, bot_token, channel_id, image_url=image_url)
 
     # 6. Обновление истории
     if success:
