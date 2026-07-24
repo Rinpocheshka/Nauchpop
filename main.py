@@ -265,9 +265,10 @@ def main():
         print("   Нужны: GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID")
         return
 
-    # Настройка Gemini
+    # Настройка Gemini — два модели
     genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel("gemini-3.5-flash-lite")
+    model_lite = genai.GenerativeModel("gemini-3.5-flash-lite")  # скоринг (много запросов)
+    model_flash = genai.GenerativeModel("gemini-3.5-flash")      # финальный пост (1 запрос, качественнее)
 
     # Загружаем и чистим историю
     history = load_history()
@@ -290,7 +291,7 @@ def main():
 
     # 3. LLM-оценка
     print(f"\n🧠 Шаг 3: LLM-оценка (score >= {MIN_SCORE})...")
-    top_news = llm_score(candidates, model)
+    top_news = llm_score(candidates, model_lite)
     print(f"  🏆 Прошли фильтр: {len(top_news)}")
 
     if not top_news:
@@ -299,7 +300,7 @@ def main():
 
     # 4. Генерация поста
     print("\n✍️ Шаг 4: Генерация поста...")
-    post = generate_post(top_news, model)
+    post = generate_post(top_news, model_flash)
     if not post:
         print("❌ Не удалось сгенерировать пост. Завершаю.")
         return
