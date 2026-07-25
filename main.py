@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import time
 import hashlib
@@ -170,8 +169,8 @@ def llm_score(candidates, model):
     return scored[:TOP_N]
 
 
-def generate_post(top_news, model_flash, model_lite=None):
-    """Генерация поста-дайджеста через Gemini. Фолбэк на model_lite при 429."""
+def generate_post(top_news, model):
+    """Генерация поста-дайджеста через Gemini."""
     news_block = ""
     for i, n in enumerate(top_news, 1):
         news_block += f"""
@@ -197,10 +196,9 @@ def generate_post(top_news, model_flash, model_lite=None):
 - Каждую новость нумеруй: 1️⃣, 2️⃣, 3️⃣
 - После номера — <b>жирный заголовок</b>
 - РАЗВЁРНУТОЕ описание (6-10 предложений): что нашли, детали, почему это важно для нас
-- В КАЖДОМ ОПИСАНИИ ОБЯЗАТЕЛЬНО встрой ссылку ВНУТЬ текста, не отдельной строкой. Каждый раз ИСПОЛЬЗУЙ РАЗНУЮ формулировку для ссылки, чередуй из этих вариантов (или придумай свою):
+- В КАЖДОМ ОПИСАНИИ ОБЯЗАТЕЛЬНО встрой ссылку ВНУТЬ текста, не отдельной строкой. Каждый раз ИСПОЛЬЗУЙ РАЗНУЮ формулировку для ссылки, чередуй из этих вариантов или придумай свой:
   • <a href="URL">Вот полная статья</a>
   • <a href="URL">Тут подробнее</a>
-  • <a href="URL">Источник — тапай сюда</a>
   • <a href="URL">Оригинал здесь</a>
   • <a href="URL">Если хочешь копнуть глубже</a>
   • <a href="URL">Все детали в оригинале</a>
@@ -220,93 +218,27 @@ def generate_post(top_news, model_flash, model_lite=None):
 
 Сгенерируй пост в HTML (parse_mode=HTML)."""
 
-    # Пробуем flash, при ошибке — фолбэк на lite
-    models_to_try = [model_flash]
-    if model_lite and model_lite != model_flash:
-        models_to_try.append(model_lite)
-
-    for model in models_to_try:
-        try:
-            response = model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            print(f"  ❌ Ошибка ({model.model_name}): {e}")
-            if "429" in str(e) and model == model_flash and model_lite:
-                print("  ⏳ Flash quota exhausted, фолбэк на Flash Lite...")
-                continue
-            return None
-    return None
-
-def fetch_og_image(url):
-    """Извлекает og:image URL из страницы."""
     try:
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        if resp.status_code != 200:
-            return None
-        soup = BeautifulSoup(resp.text, "html.parser")
-        # Ищем og:image
-        meta = soup.find("meta", property="og:image")
-        if meta and meta.get("content"):
-            return meta["content"]
-        # Фолбэк: twitter:image
-        meta = soup.find("meta", attrs={"name": "twitter:image"})
-        if meta and meta.get("content"):
-            return meta["content"]
+        response = model.generate_content(prompt)
+        return response.text.strip()
     except Exception as e:
-        print(f"  ⚠️ Не удалось извлечь картинку: {e}")
-    return None
+        print(f"❌ Ошибка генерации поста: {e}")
+        return None
 
 
-def send_to_telegram(text, bot_token, channel_id, image_url=None):
-    """Отправка поста в Telegram. Если image_url — отправляем фото, потом текст."""
-    if image_url:
-        # 1. Скачиваем картинку
-        img_bytes = None
-        try:
-            img_resp = requests.get(image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            if img_resp.status_code == 200:
-                img_bytes = img_resp.content
-            else:
-                print(f"  ⚠️ Не удалось скачать картинку ({img_resp.status_code})")
-        except Exception as e:
-            print(f"  ⚠️ Ошибка скачивания картинки: {e}")
-
-        if img_bytes:
-            # Извлекаем только заголовок первой новости (до описания) — без HTML
-            # Просто берём первые 200 символов поста как подпись
-            caption = text[:200].replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
-            # Обрезаем по последнему слову, чтобы не обрывать
-            if len(text) > 200:
-                caption = caption[:caption.rfind(" ")] + "..."
-
-            url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            resp = requests.post(
-                url,
-                data={"chat_id": channel_id, "caption": caption},
-                files={"photo": ("news.jpg", img_bytes, "image/jpeg")},
-                timeout=30,
-            )
-            if resp.status_code == 200:
-                print("  📸 Картинка отправлена")
-            else:
-                print(f"  ⚠️ Ошибка sendPhoto ({resp.status_code}): {resp.text}")
-
-    # Отправляем весь текст поста отдельным сообщением
-    return _send_text(text, bot_token, channel_id)
-
-
-def _send_text(text, bot_token, channel_id):
-    """Отправка текстового сообщения."""
+def send_to_telegram(text, bot_token, channel_id):
+    """Отправка поста в Telegram."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": channel_id,
         "text": text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": True,
+        "disable_web_page_preview": False,
     }
+
     resp = requests.post(url, json=payload, timeout=30)
     if resp.status_code == 200:
-        print("✅ Текст отправлен в Telegram!")
+        print("✅ Пост успешно отправлен в Telegram!")
         return True
     else:
         print(f"❌ Ошибка Telegram API ({resp.status_code}): {resp.text}")
@@ -368,7 +300,7 @@ def main():
 
     # 4. Генерация поста
     print("\n✍️ Шаг 4: Генерация поста...")
-    post = generate_post(top_news, model_flash, model_lite=model_lite)
+    post = generate_post(top_news, model_flash)
     if not post:
         print("❌ Не удалось сгенерировать пост. Завершаю.")
         return
@@ -377,13 +309,7 @@ def main():
 
     # 5. Отправка в Telegram
     print("\n📤 Шаг 5: Отправка в Telegram...")
-    # Извлекаем картинку из первой новости
-    image_url = None
-    if top_news:
-        image_url = fetch_og_image(top_news[0]["url"])
-        if image_url:
-            print(f"  🖼️ Картинка: {image_url[:80]}...")
-    success = send_to_telegram(post, bot_token, channel_id, image_url=image_url)
+    success = send_to_telegram(post, bot_token, channel_id)
 
     # 6. Обновление истории
     if success:
