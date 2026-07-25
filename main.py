@@ -258,60 +258,41 @@ def fetch_og_image(url):
 
 
 def send_to_telegram(text, bot_token, channel_id, image_url=None):
-    """Отправка поста в Telegram. Если image_url — отправляем фото + текст."""
+    """Отправка поста в Telegram. Если image_url — отправляем фото, потом текст."""
     if image_url:
         # 1. Скачиваем картинку
+        img_bytes = None
         try:
             img_resp = requests.get(image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            if img_resp.status_code != 200:
-                print(f"  ⚠️ Не удалось скачать картинку ({img_resp.status_code}), отправляю без неё")
-                image_url = None
+            if img_resp.status_code == 200:
+                img_bytes = img_resp.content
+            else:
+                print(f"  ⚠️ Не удалось скачать картинку ({img_resp.status_code})")
         except Exception as e:
             print(f"  ⚠️ Ошибка скачивания картинки: {e}")
-            image_url = None
 
-    if image_url:
-        # Разбиваем текст на заголовок (до первого описания) и остальное
-        # Ищем первую новость: от вступления до второго номера
-        parts = re.split(r'(1️⃣|2️⃣|3️⃣)', text, maxsplit=2)
-        # parts = ['intro', '1️⃣', 'описание1...2️⃣', 'описание2...3️⃣', 'описание3...']
-        intro_and_first = ""
-        rest = text
-        if len(parts) >= 3:
-            intro_and_first = parts[0] + parts[1] + parts[2]
-            rest = "".join(parts[3:]) if len(parts) > 3 else ""
-            # Убираем лишний пробел в начале rest
-            rest = rest.lstrip()
+        if img_bytes:
+            # Извлекаем только заголовок первой новости (до описания) — без HTML
+            # Просто берём первые 200 символов поста как подпись
+            caption = text[:200].replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+            # Обрезаем по последнему слову, чтобы не обрывать
+            if len(text) > 200:
+                caption = caption[:caption.rfind(" ")] + "..."
 
-        # Ограничиваем caption (Telegram: 1024 символа)
-        if len(intro_and_first) > 1024:
-            intro_and_first = intro_and_first[:1020] + "..."
+            url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+            resp = requests.post(
+                url,
+                data={"chat_id": channel_id, "caption": caption},
+                files={"photo": ("news.jpg", img_bytes, "image/jpeg")},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                print("  📸 Картинка отправлена")
+            else:
+                print(f"  ⚠️ Ошибка sendPhoto ({resp.status_code}): {resp.text}")
 
-        # Отправляем фото с caption
-        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-        with open("/tmp/news_image.jpg", "wb") as f:
-            f.write(img_resp.content)
-        with open("/tmp/news_image.jpg", "rb") as photo:
-            payload = {
-                "chat_id": channel_id,
-                "caption": intro_and_first,
-                "parse_mode": "HTML",
-            }
-            resp = requests.post(url, data=payload, files={"photo": photo}, timeout=30)
-
-        if resp.status_code != 200:
-            print(f"  ⚠️ Ошибка sendPhoto ({resp.status_code}): {resp.text}")
-            # Фолбэк — отправляем просто текст
-            return _send_text(text, bot_token, channel_id)
-
-        print("  📸 Картинка отправлена")
-
-        # Отправляем остаток текста
-        if rest.strip():
-            return _send_text(rest, bot_token, channel_id)
-        return True
-    else:
-        return _send_text(text, bot_token, channel_id)
+    # Отправляем весь текст поста отдельным сообщением
+    return _send_text(text, bot_token, channel_id)
 
 
 def _send_text(text, bot_token, channel_id):
