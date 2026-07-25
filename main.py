@@ -170,8 +170,8 @@ def llm_score(candidates, model):
     return scored[:TOP_N]
 
 
-def generate_post(top_news, model):
-    """Генерация поста-дайджеста через Gemini."""
+def generate_post(top_news, model_flash, model_lite=None):
+    """Генерация поста-дайджеста через Gemini. Фолбэк на model_lite при 429."""
     news_block = ""
     for i, n in enumerate(top_news, 1):
         news_block += f"""
@@ -197,9 +197,10 @@ def generate_post(top_news, model):
 - Каждую новость нумеруй: 1️⃣, 2️⃣, 3️⃣
 - После номера — <b>жирный заголовок</b>
 - РАЗВЁРНУТОЕ описание (6-10 предложений): что нашли, детали, почему это важно для нас
-- В КАЖДОМ ОПИСАНИИ ОБЯЗАТЕЛЬНО встрой ссылку ВНУТЬ текста, не отдельной строкой. Каждый раз ИСПОЛЬЗУЙ РАЗНУЮ формулировку для ссылки, чередуй из этих вариантов или придумай свой:
+- В КАЖДОМ ОПИСАНИИ ОБЯЗАТЕЛЬНО встрой ссылку ВНУТЬ текста, не отдельной строкой. Каждый раз ИСПОЛЬЗУЙ РАЗНУЮ формулировку для ссылки, чередуй из этих вариантов (или придумай свою):
   • <a href="URL">Вот полная статья</a>
   • <a href="URL">Тут подробнее</a>
+  • <a href="URL">Источник — тапай сюда</a>
   • <a href="URL">Оригинал здесь</a>
   • <a href="URL">Если хочешь копнуть глубже</a>
   • <a href="URL">Все детали в оригинале</a>
@@ -219,13 +220,22 @@ def generate_post(top_news, model):
 
 Сгенерируй пост в HTML (parse_mode=HTML)."""
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"❌ Ошибка генерации поста: {e}")
-        return None
+    # Пробуем flash, при ошибке — фолбэк на lite
+    models_to_try = [model_flash]
+    if model_lite and model_lite != model_flash:
+        models_to_try.append(model_lite)
 
+    for model in models_to_try:
+        try:
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            print(f"  ❌ Ошибка ({model.model_name}): {e}")
+            if "429" in str(e) and model == model_flash and model_lite:
+                print("  ⏳ Flash quota exhausted, фолбэк на Flash Lite...")
+                continue
+            return None
+    return None
 
 def fetch_og_image(url):
     """Извлекает og:image URL из страницы."""
@@ -377,7 +387,7 @@ def main():
 
     # 4. Генерация поста
     print("\n✍️ Шаг 4: Генерация поста...")
-    post = generate_post(top_news, model_flash)
+    post = generate_post(top_news, model_flash, model_lite=model_lite)
     if not post:
         print("❌ Не удалось сгенерировать пост. Завершаю.")
         return
