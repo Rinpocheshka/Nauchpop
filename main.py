@@ -187,8 +187,8 @@ def llm_score(candidates, model):
     return scored[:TOP_N]
 
 
-def generate_post(top_news, model):
-    """Генерация поста-дайджеста через Gemini."""
+def generate_post(top_news, model_flash, model_lite=None):
+    """Генерация поста-дайджеста через Gemini. Фолбэк на model_lite при 429."""
     recent_posts = load_recent_posts()
     recent_block = ""
     if recent_posts:
@@ -244,12 +244,22 @@ def generate_post(top_news, model):
 {recent_block}
 Сгенерируй пост в HTML (parse_mode=HTML)."""
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"❌ Ошибка генерации поста: {e}")
-        return None
+    # Пробуем flash, при 429 — фолбэк на lite
+    models_to_try = [model_flash]
+    if model_lite and model_lite != model_flash:
+        models_to_try.append(model_lite)
+
+    for model in models_to_try:
+        try:
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            print(f"  ❌ Ошибка ({model.model_name}): {e}")
+            if "429" in str(e) and model == model_flash and model_lite:
+                print("  ⏳ Flash quota exhausted, фолбэк на Flash Lite...")
+                continue
+            return None
+    return None
 
 
 def send_to_telegram(text, bot_token, channel_id):
@@ -295,7 +305,6 @@ def main():
     genai.configure(api_key=gemini_key)
     model_lite = genai.GenerativeModel("gemini-3.5-flash-lite")  # скоринг (много запросов)
     model_flash = genai.GenerativeModel("gemini-3.5-flash")      # финальный пост (1 запрос, качественнее)
-
     # Загружаем и чистим историю
     history = load_history()
     history = cleanup_history(history)
@@ -326,7 +335,7 @@ def main():
 
     # 4. Генерация поста
     print("\n✍️ Шаг 4: Генерация поста...")
-    post = generate_post(top_news, model_flash)
+    post = generate_post(top_news, model_flash, model_lite=model_lite)
     if not post:
         print("❌ Не удалось сгенерировать пост. Завершаю.")
         return
