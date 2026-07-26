@@ -44,6 +44,10 @@ TOP_N = 3
 # Файл истории
 HISTORY_FILE = "history.json"
 
+# Файл последних постов (для избежания повторов)
+RECENT_POSTS_FILE = "recent_posts.json"
+RECENT_POSTS_MAX = 3
+
 # ============================================================
 #  ФУНКЦИИ
 # ============================================================
@@ -61,6 +65,20 @@ def save_history(history):
     """Сохранение истории в файл."""
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+def load_recent_posts():
+    """Загрузка последних постов (plain text) для избежания повторов."""
+    if os.path.exists(RECENT_POSTS_FILE):
+        with open(RECENT_POSTS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def save_recent_posts(posts):
+    """Сохранение последних N постов."""
+    with open(RECENT_POSTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(posts[-RECENT_POSTS_MAX:], f, ensure_ascii=False, indent=2)
 
 
 def cleanup_history(history, days=HISTORY_DAYS):
@@ -171,6 +189,14 @@ def llm_score(candidates, model):
 
 def generate_post(top_news, model):
     """Генерация поста-дайджеста через Gemini."""
+    recent_posts = load_recent_posts()
+    recent_block = ""
+    if recent_posts:
+        recent_block = "\nПОСЛЕДНИЕ ПОСТЫ КАНАЛА (НИКОГДА не повторяй фразы, обороты и структуру из них):\n"
+        for i, rp in enumerate(recent_posts[-RECENT_POSTS_MAX:], 1):
+            # Берём только текст без HTML-тегов
+            clean = re.sub(r'<[^>]+>', '', rp)[:500]
+            recent_block += f"\n--- Пост {i} ---\n{clean}\n"
     news_block = ""
     for i, n in enumerate(top_news, 1):
         news_block += f"""
@@ -215,7 +241,7 @@ def generate_post(top_news, model):
 
 Вот новости:
 {news_block}
-
+{recent_block}
 Сгенерируй пост в HTML (parse_mode=HTML)."""
 
     try:
@@ -316,6 +342,10 @@ def main():
         for n in top_news:
             history[n["url"]] = datetime.now(timezone.utc).isoformat()
         save_history(history)
+        # Сохраняем текст поста для избежания повторов в будущем
+        recent_posts = load_recent_posts()
+        recent_posts.append(post)
+        save_recent_posts(recent_posts)
         print(f"💾 История обновлена (+{len(top_news)} записей)")
     else:
         print("⚠️ Пост не отправлен, история не обновлена.")
