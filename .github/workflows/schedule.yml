@@ -2,7 +2,7 @@ name: Science-Pop Bot Run
 
 on:
   schedule:
-    - cron: '38 15 * * *'  # 18:38 МСК = 15:38 UTC
+    - cron: '57 16 * * *'  # 19:57 МСК = 16:57 UTC
   workflow_dispatch:  # Ручной запуск
 
 env:
