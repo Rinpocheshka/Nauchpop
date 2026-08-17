@@ -303,8 +303,8 @@ def main():
 
     # Настройка Gemini — два модели
     genai.configure(api_key=gemini_key)
-    model_lite = genai.GenerativeModel("gemini-3.5-flash-lite")  # скоринг (много запросов)
-    model_flash = genai.GenerativeModel("gemini-3.5-flash")      # финальный пост (1 запрос, качественнее)
+    model_lite = genai.GenerativeModel("gemini-3.6-flash-lite")  # скоринг (много запросов)
+    model_flash = genai.GenerativeModel("gemini-3.7-flash")      # финальный пост (1 запрос, качественнее)
     # Загружаем и чистим историю
     history = load_history()
     history = cleanup_history(history)
