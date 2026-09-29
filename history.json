@@ -1,10 +1,4 @@
 {
-  "https://www.space.com/science/climate-change/the-warmest-summer-on-record-2026-hit-a-scorching-new-high-in-the-us": "2026-09-14T20:44:55.043884+00:00",
-  "https://science.nasa.gov/science-research/biological-physical-sciences/new-crops-health-research-proposals-to-help-nasa-advance-exploration/": "2026-09-14T20:44:55.043901+00:00",
-  "https://science.nasa.gov/image-article/apod-2026-september-14-where-your-elements-came-from/": "2026-09-14T20:44:55.043904+00:00",
-  "https://www.space.com/space-exploration/launches-spacecraft/spacexs-next-starship-launch-will-lift-off-on-sept-22-and-aim-to-reach-orbit-for-1st-time": "2026-09-15T20:08:33.230340+00:00",
-  "https://science.nasa.gov/missions/webb/nasas-webb-reveals-dynamic-panorama-of-star-formation/": "2026-09-15T20:08:33.230351+00:00",
-  "https://www.space.com/entertainment/space-movies-shows/captain-eo-at-40-michael-jacksons-wild-sci-fi-movie-that-you-could-only-watch-at-disney-theme-parks": "2026-09-15T20:08:33.230354+00:00",
   "https://science.nasa.gov/solar-system/moon/nasas-moon-orbiter-spots-new-once-in-century-moon-crater/": "2026-09-16T19:47:46.853436+00:00",
   "https://www.nasa.gov/general/nasas-integrated-medical-model-imm/": "2026-09-16T19:47:46.853450+00:00",
   "https://science.nasa.gov/universe/newfound-baby-planet-smashes-record-for-youngest-known-world/": "2026-09-16T19:47:46.853454+00:00",
@@ -37,5 +31,8 @@
   "https://www.universetoday.com/articles/astronomers-find-a-sub-neptune-orbiting-completely-backward-around-a-red-dwarf": "2026-09-26T19:30:01.399935+00:00",
   "https://www.sciencedaily.com/releases/2026/09/260927033754.htm": "2026-09-27T19:55:42.292223+00:00",
   "https://www.sciencedaily.com/releases/2026/09/260925093210.htm": "2026-09-27T19:55:42.292241+00:00",
-  "https://www.sciencedaily.com/releases/2026/09/260925093206.htm": "2026-09-27T19:55:42.292243+00:00"
+  "https://www.sciencedaily.com/releases/2026/09/260925093206.htm": "2026-09-27T19:55:42.292243+00:00",
+  "https://www.sciencedaily.com/releases/2026/09/260929053528.htm": "2026-09-29T21:08:15.191761+00:00",
+  "https://www.nasa.gov/image-article/nasa-made-material-moon-manufacturing/": "2026-09-29T21:08:15.191775+00:00",
+  "https://www.sciencedaily.com/releases/2026/09/260928100534.htm": "2026-09-29T21:08:15.191779+00:00"
 }
