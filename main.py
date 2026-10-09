@@ -121,6 +121,20 @@ def fetch_feeds():
 
                 url = entry.get("link", "")
                 title = entry.get("title", "")
+                
+                # Извлечение картинки
+                image_url = ""
+                if hasattr(entry, "media_content") and entry.media_content:
+                    image_url = entry.media_content[0].get("url", "")
+                elif hasattr(entry, "enclosures") and entry.enclosures:
+                    image_url = entry.enclosures[0].get("href", "")
+                if not image_url:
+                    raw_summary = entry.get("summary", "") or entry.get("description", "")
+                    soup_img = BeautifulSoup(raw_summary, "html.parser")
+                    img_tag = soup_img.find("img")
+                    if img_tag and img_tag.get("src"):
+                        image_url = img_tag["src"]
+
                 summary = strip_html(
                     entry.get("summary", "") or entry.get("description", "")
                 )
@@ -133,6 +147,7 @@ def fetch_feeds():
                     "title": title,
                     "url": url,
                     "summary": summary[:500],
+                    "image": image_url,
                 })
 
             print(f"  ✅ {feed_name}: {len(feed.entries)} записей")
@@ -268,15 +283,24 @@ def generate_post(top_news, model_flash, model_lite=None):
     return None
 
 
-def send_to_telegram(text, bot_token, channel_id):
+def send_to_telegram(text, bot_token, channel_id, image_url=""):
     """Отправка поста в Telegram."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": channel_id,
         "text": text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False,
     }
+    
+    if image_url:
+        payload["link_preview_options"] = {
+            "url": image_url,
+            "show_above_text": True,
+            "prefer_large_media": True
+        }
+    else:
+        # Убираем превью снизу, если картинки нет
+        payload["link_preview_options"] = {"is_disabled": True}
 
     resp = requests.post(url, json=payload, timeout=30)
     if resp.status_code == 200:
@@ -350,7 +374,9 @@ def main():
 
     # 5. Отправка в Telegram
     print("\n📤 Шаг 5: Отправка в Telegram...")
-    success = send_to_telegram(post, bot_token, channel_id)
+    # Ищем первую попавшуюся картинку
+    post_image = next((n.get("image") for n in top_news if n.get("image")), "")
+    success = send_to_telegram(post, bot_token, channel_id, image_url=post_image)
 
     # 6. Обновление истории
     if success:
